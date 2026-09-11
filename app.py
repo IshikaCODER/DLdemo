@@ -24,7 +24,7 @@ st.set_page_config(
 st.title("🧠 Brain Tumor Detection & Classification")
 st.markdown(
     """
-    ### AI-Based MRI Image Classification
+    ### Deep Learning-Based MRI Image Classification
 
     Upload a **brain MRI image** in JPG, JPEG, or PNG format.
     The trained deep learning model will analyze the image and
@@ -48,7 +48,7 @@ st.info(
     2. Make sure the uploaded image is clear and relevant to brain MRI analysis.
     3. Preview the uploaded image.
     4. Click **Classify Scan**.
-    5. The AI model will generate the predicted class and probability
+    5. The Deep Learning model will generate the predicted class and probability
        distribution for all four categories.
 
     The image is automatically resized to **224 × 224 pixels** before
@@ -73,10 +73,10 @@ with st.expander("📌 Image Requirements & Guidelines"):
 
         | Class | Meaning |
         |---|---|
-        | 🧠 Glioma | MRI classified as glioma |
-        | 🧠 Meningioma | MRI classified as meningioma |
-        | ✅ No Tumor | MRI classified as showing no tumor |
-        | 🧠 Pituitary | MRI classified as pituitary tumor |
+        | 🧠 Glioma | Tumor arising from glial cells of the brain or spinal cord. |
+        | 🧠 Meningioma | Tumor arising from the protective membranes surrounding the brain and spinal cord. |
+        | ✅ No Tumor | MRI classified by the model as showing no detectable brain tumor. |
+        | 🧠 Pituitary | Tumor arising in the pituitary gland at the base of the brain. |
         """
     )
 
@@ -195,7 +195,7 @@ if uploaded_file is not None:
         # CLASSIFICATION BUTTON
         # ----------------------------------------------------
 
-        st.subheader("🤖 AI Classification")
+        st.subheader("🤖 Deep Learning Classification")
 
         st.write(
             "Click the button below to run the trained deep learning model "
