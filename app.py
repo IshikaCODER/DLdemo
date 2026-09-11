@@ -13,7 +13,7 @@ MODEL_PATH = "enhanced_model.pth"
 st.set_page_config(
     page_title="Brain Tumor Detection & Classification",
     page_icon="🧠",
-    layout="centered"
+    layout="justified"
 )
 
 # ============================================================
