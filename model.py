@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt, seaborn as sns
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
-MEAN_NP = np.array(IMAGENET_MEAN, dtype=np.float32).reshape(1, 1, 3)
-STD_NP = np.array(IMAGENET_STD, dtype=np.float32).reshape(1, 1, 3)
+MEAN_NP = np.array(IMAGENET_MEAN)
+STD_NP = np.array(IMAGENET_STD)
 
 # --- CBAM ---
 class ChannelAttention(nn.Module):
@@ -65,15 +65,9 @@ class ResNet50CBAMBackbone(nn.Module):
         return x
 
 # --- Superpixel Graph Construction ---
-# def _unnorm(t):
-#     img=t.detach().cpu().numpy().transpose(1,2,0)
-#     return np.clip(img*STD_NP+MEAN_NP,0,1)
 def _unnorm(t):
-    # Convert PyTorch tensor [C, H, W] -> NumPy array [H, W, C]
-    img = t.detach().cpu().numpy().transpose(1, 2, 0)
-    # Un-normalize back to [0, 1] range using reshaped arrays
-    img = img * STD_NP + MEAN_NP
-    return np.clip(img, 0.0, 1.0)
+    img=t.detach().cpu().numpy().transpose(1,2,0)
+    return np.clip(img*STD_NP+MEAN_NP,0,1)
 
 def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
     C,H,W = feat_map.shape
@@ -108,8 +102,8 @@ def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
     return Data(x=nf,edge_index=ei,y=torch.tensor([label],dtype=torch.long))
 
 def build_multiscale_graphs(img_t, feat_map, label):
-    fine=build_superpixel_graph(img_t,feat_map,label,n_seg=50,compact=10)
-    coarse=build_superpixel_graph(img_t,feat_map,label,n_seg=15,compact=30)
+    fine=build_superpixel_graph(img_t,feat_map,label,n_seg=40,compact=8)
+    coarse=build_superpixel_graph(img_t,feat_map,label,n_seg=20,compact=12)
     return fine, coarse
 
 
