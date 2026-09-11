@@ -42,29 +42,6 @@ class CBAM(nn.Module):
         self.ca = ChannelAttention(ch, r); self.sa = SpatialAttention(k)
     def forward(self, x): return self.sa(self.ca(x))
 
-
-# --- ResNet50 + CBAM Backbone (Part 3) ---
-class ResNet50CBAMBackbone(nn.Module):
-    """ResNet50 with CBAM after each major block. [B,3,224,224]->[B,2048,7,7]"""
-    def __init__(self, pretrained=True, freeze=False):
-        super().__init__()
-        resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None)
-        self.stem = nn.Sequential(resnet.conv1,resnet.bn1,resnet.relu,resnet.maxpool)
-        self.layer1=resnet.layer1; self.cbam1=CBAM(256)
-        self.layer2=resnet.layer2; self.cbam2=CBAM(512)
-        self.layer3=resnet.layer3; self.cbam3=CBAM(1024)
-        self.layer4=resnet.layer4; self.cbam4=CBAM(2048)
-        if freeze:
-            for p in self.parameters(): p.requires_grad=False
-    def forward(self, x):
-        x=self.stem(x)
-        x=self.cbam1(self.layer1(x))
-        x=self.cbam2(self.layer2(x))
-        x=self.cbam3(self.layer3(x))
-        x=self.cbam4(self.layer4(x))
-        return x
-
-# # --- Superpixel Graph Construction ---
 # --- Superpixel Graph Construction ---
 def _unnorm(t):
     img=t.detach().cpu().numpy().transpose(1,2,0)
@@ -107,6 +84,27 @@ def build_multiscale_graphs(img_t, feat_map, label):
     coarse=build_superpixel_graph(img_t,feat_map,label,n_seg=15,compact=30)
     return fine, coarse
 
+
+# --- ResNet50 + CBAM Backbone (Part 3) ---
+class ResNet50CBAMBackbone(nn.Module):
+    """ResNet50 with CBAM after each major block. [B,3,224,224]->[B,2048,7,7]"""
+    def __init__(self, pretrained=True, freeze=False):
+        super().__init__()
+        resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None)
+        self.stem = nn.Sequential(resnet.conv1,resnet.bn1,resnet.relu,resnet.maxpool)
+        self.layer1=resnet.layer1; self.cbam1=CBAM(256)
+        self.layer2=resnet.layer2; self.cbam2=CBAM(512)
+        self.layer3=resnet.layer3; self.cbam3=CBAM(1024)
+        self.layer4=resnet.layer4; self.cbam4=CBAM(2048)
+        if freeze:
+            for p in self.parameters(): p.requires_grad=False
+    def forward(self, x):
+        x=self.stem(x)
+        x=self.cbam1(self.layer1(x))
+        x=self.cbam2(self.layer2(x))
+        x=self.cbam3(self.layer3(x))
+        x=self.cbam4(self.layer4(x))
+        return x
 
 # --- Class-Aware GAT ---
 class ClassAwareGATConv(MessagePassing):
