@@ -30,38 +30,62 @@ class GradCAMStreamlit:
         self.act = None
         self.grad = None
 
-    def _forward_hook(self, module, input, output):
-        self.act = output.detach()
-
-    def _backward_hook(self, module, grad_in, grad_out):
-        self.grad = grad_out[0].detach()
-
     def generate(self, img_tensor, target_class=None):
         self.model.eval()
-        img_t = img_tensor.clone().detach().requires_grad_(True)
         
-        # Attach dynamic hooks
-        h_fw = self.model.backbone.layer4.register_forward_hook(self._forward_hook)
-        h_bw = self.model.backbone.layer4.register_full_backward_hook(self._backward_hook)
+        # Ensure gradients are explicitly enabled for Grad-CAM computation
+        with torch.enable_grad():
+            img_t = img_tensor.clone().detach().requires_grad_(True)
 
-        out = self.model(img_t)
-        if target_class is None:
-            target_class = out.argmax(1).item()
+            # Target target layer: layer4 backbone
+            target_layer = self.model.backbone.layer4
 
-        self.model.zero_grad()
-        out[0, target_class].backward()
+            # Define forward hook
+            def forward_hook(module, input, output):
+                self.act = output
 
-        w = self.grad.mean([2, 3], keepdim=True)
-        cam = F.relu((w * self.act).sum(1, keepdim=True))
-        cam = F.interpolate(cam, (224, 224), mode='bilinear', align_corners=False)
-        cam = cam.squeeze().cpu().numpy()
-        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+            # Define tensor-level backward hook (more reliable than module backward hook)
+            def backward_hook(module, grad_in, grad_out):
+                self.grad = grad_out[0]
 
-        # Remove hooks to clear memory
-        h_fw.remove()
-        h_bw.remove()
+            # Register dynamic hooks
+            h_fw = target_layer.register_forward_hook(forward_hook)
+            h_bw = target_layer.register_full_backward_hook(backward_hook)
 
-        return cam, target_class
+            # Forward pass
+            out = self.model(img_t)
+            if target_class is None:
+                target_class = out.argmax(1).item()
+
+            # Zero existing gradients and trigger backward pass
+            self.model.zero_grad()
+            score = out[0, target_class]
+            score.backward(retain_graph=True)
+
+            # Remove hooks immediately after execution
+            h_fw.remove()
+            h_bw.remove()
+
+            # Safety fallback: If backward hook didn't capture gradients, extract manually from act
+            if self.grad is None and self.act is not None and self.act.grad is not None:
+                self.grad = self.act.grad
+
+            # If grad is still None, raise a clean exception with context
+            if self.grad is None:
+                raise RuntimeError("Grad-CAM failed to capture gradients from backbone layer4.")
+
+            # Compute feature weights and activation map
+            w = self.grad.detach().mean([2, 3], keepdim=True)
+            act = self.act.detach()
+            cam = F.relu((w * act).sum(1, keepdim=True))
+            cam = F.interpolate(cam, (224, 224), mode='bilinear', align_corners=False)
+            cam = cam.squeeze().cpu().numpy()
+            
+            # Min-Max normalize
+            cam_min, cam_max = cam.min(), cam.max()
+            cam = (cam - cam_min) / (cam_max - cam_min + 1e-8)
+
+            return cam, target_class
 
 def visualize_gradcam_fig(model, raw_image, img_tensor, target_class, class_name):
     gcam = GradCAMStreamlit(model)
