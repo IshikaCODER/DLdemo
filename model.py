@@ -12,6 +12,32 @@ from scipy import ndimage
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, seaborn as sns
 
+# --- CBAM ---
+class ChannelAttention(nn.Module):
+    def __init__(self, ch, r=16):
+        super().__init__()
+        mid = max(ch//r, 8)
+        self.mlp = nn.Sequential(nn.Linear(ch,mid,bias=False),nn.ReLU(True),nn.Linear(mid,ch,bias=False))
+    def forward(self, x):
+        B,C,_,_ = x.shape
+        a = self.mlp(x.mean([2,3])); m = self.mlp(x.amax([2,3]))
+        return x * torch.sigmoid(a+m).view(B,C,1,1)
+
+class SpatialAttention(nn.Module):
+    def __init__(self, k=7):
+        super().__init__()
+        self.conv = nn.Conv2d(2,1,k,padding=k//2,bias=False)
+    def forward(self, x):
+        d = torch.cat([x.mean(1,keepdim=True), x.amax(1,keepdim=True)], 1)
+        return x * torch.sigmoid(self.conv(d))
+
+class CBAM(nn.Module):
+    def __init__(self, ch, r=16, k=7):
+        super().__init__()
+        self.ca = ChannelAttention(ch, r); self.sa = SpatialAttention(k)
+    def forward(self, x): return self.sa(self.ca(x))
+
+
 # --- ResNet50 + CBAM Backbone (Part 3) ---
 class ResNet50CBAMBackbone(nn.Module):
     """ResNet50 with CBAM after each major block. [B,3,224,224]->[B,2048,7,7]"""
@@ -133,7 +159,7 @@ class DualGATClassifier(nn.Module):
 
 # --- Full Model ---
 class EnhancedResNet50GAT(nn.Module):
-    def __init__(self, pretrained=True, freeze=False):
+    def __init__(self, pretrained=True, freeze=False, num_classes=4):
         super().__init__()
         self.backbone = ResNet50CBAMBackbone(pretrained, freeze)
         self.gat = DualGATClassifier()
