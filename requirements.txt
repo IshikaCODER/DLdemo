@@ -1,5 +1,6 @@
-tensorflow==2.15.0
 streamlit
+gdown
 pillow
 numpy
-gdown
+torch --extra-index-url https://download.pytorch.org/whl/cpu
+torchvision --extra-index-url https://download.pytorch.org/whl/cpu
