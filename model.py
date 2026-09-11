@@ -37,13 +37,14 @@ class CBAM(nn.Module):
         self.ca = ChannelAttention(ch, r); self.sa = SpatialAttention(k)
     def forward(self, x): return self.sa(self.ca(x))
 
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
-MEAN_NP = np.array(IMAGENET_MEAN)
-STD_NP = np.array(IMAGENET_STD)
+
 
 # --- Superpixel Graph Construction ---
 def _unnorm(t):
+    IMAGENET_MEAN = [0.485, 0.456, 0.406]
+    IMAGENET_STD = [0.229, 0.224, 0.225]
+    MEAN_NP = np.array(IMAGENET_MEAN)
+    STD_NP = np.array(IMAGENET_STD)
     img=t.detach().cpu().numpy().transpose(1,2,0)
     return np.clip(img*STD_NP+MEAN_NP,0,1)
 
