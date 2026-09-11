@@ -6,6 +6,9 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 
+# 1. Import your exact model class from model.py
+from model import EnhancedResNet50GAT
+
 MODEL_PATH = "enhanced_model.pth"
 
 st.set_page_config(page_title="Brain Tumor Detection", layout="centered")
@@ -14,23 +17,28 @@ st.title("🧠 Brain Tumor Detection & Classification")
 
 @st.cache_resource
 def load_tumor_model():
+    # Download model weights from Google Drive if not present locally
     if not os.path.exists(MODEL_PATH):
         file_id = "1mhW8fp31-sb3Bv-UYuXTg8bQrARx_6ki"
         url = f"https://drive.google.com/uc?id={file_id}"
         gdown.download(url, MODEL_PATH, quiet=False)
 
-    # Load PyTorch model onto CPU
-    model = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
+    # 2. Instantiate the imported architecture class
+    model = EnhancedResNet50GAT(num_classes=4)
+
+    # 3. Load state dict weights into the architecture
+    state_dict = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
+    model.load_state_dict(state_dict)
     model.eval()
     return model
 
 
-# Load PyTorch model once
+# Load model into memory ONCE
 model = load_tumor_model()
 
 CLASSES = ["glioma", "meningioma", "notumor", "pituitary"]
 
-# Image Preprocessing matching PyTorch standards
+# Image Preprocessing pipeline matching PyTorch standards
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -45,7 +53,7 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded MRI Scan", width=300)
 
-    # Convert image to tensor and add batch dimension
+    # Convert image to tensor and add batch dimension [1, 3, 224, 224]
     img_tensor = transform(image).unsqueeze(0)
 
     if st.button("Classify Scan"):
@@ -55,4 +63,4 @@ if uploaded_file is not None:
 
         st.write("### Prediction Results")
         for label, prob in zip(CLASSES, probs):
-            st.progress(float(prob), text=f"{label}: {prob*100:.1f}%")
+            st.progress(float(prob), text=f"{label}: {prob * 100:.1f}%")
