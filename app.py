@@ -18,55 +18,6 @@ st.set_page_config(
 )
 
 # ============================================================
-# CUSTOM PAGE WIDTH & SPACING
-# ============================================================
-
-st.markdown(
-    """
-    <style>
-        /* Main application container */
-        .block-container {
-            max-width: 1200px;
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-            padding-left: 4rem;
-            padding-right: 4rem;
-        }
-
-        /* Main title */
-        h1 {
-            text-align: center;
-            margin-bottom: 0.5rem;
-        }
-
-        /* Subtitle / introductory content */
-        .block-container > div {
-            width: 100%;
-        }
-
-        /* Better spacing between sections */
-        hr {
-            margin-top: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        /* File uploader */
-        [data-testid="stFileUploader"] {
-            width: 100%;
-        }
-
-        /* Buttons */
-        .stButton > button {
-            width: 100%;
-            height: 3rem;
-            font-size: 1.05rem;
-            font-weight: 600;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-# ============================================================
 # PAGE HEADER
 # ============================================================
 
