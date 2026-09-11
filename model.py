@@ -12,10 +12,10 @@ from scipy import ndimage
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, seaborn as sns
 
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
-MEAN_NP = np.array(IMAGENET_MEAN)
-STD_NP = np.array(IMAGENET_STD)
+# IMAGENET_MEAN = [0.485, 0.456, 0.406]
+# IMAGENET_STD = [0.229, 0.224, 0.225]
+# MEAN_NP = np.array(IMAGENET_MEAN)
+# STD_NP = np.array(IMAGENET_STD)
 
 # --- CBAM ---
 class ChannelAttention(nn.Module):
@@ -64,42 +64,121 @@ class ResNet50CBAMBackbone(nn.Module):
         x=self.cbam4(self.layer4(x))
         return x
 
-# --- Superpixel Graph Construction ---
+# # --- Superpixel Graph Construction ---
+# def _unnorm(t):
+#     img=t.detach().cpu().numpy().transpose(1,2,0)
+#     return np.clip(img*STD_NP+MEAN_NP,0,1)
+
+# def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
+#     C,H,W = feat_map.shape
+#     img_np = _unnorm(img_t)
+#     segs = slic(img_np, n_segments=n_seg, compactness=compact, start_label=0, channel_axis=2)
+#     sh,sw = segs.shape[0]/H, segs.shape[1]/W
+#     sd = ndimage.zoom(segs.astype(float),(1/sh,1/sw),order=0).astype(int)[:H,:W]
+#     feat = feat_map.detach().cpu()
+#     uids = np.unique(sd); id2i = {s:i for i,s in enumerate(uids)}; N=len(uids)
+#     nf = torch.zeros(N, C)
+#     for s in uids:
+#         mask = torch.from_numpy((sd==s).astype(np.float32))
+#         cnt = mask.sum().clamp(min=1)
+#         nf[id2i[s]] = (feat*mask.unsqueeze(0)).sum([1,2])/cnt
+#     src,dst=[],[]
+#     for r in range(H):
+#         for c in range(W):
+#             cur=sd[r,c]
+#             for dr,dc in [(0,1),(1,0),(1,1),(1,-1)]:
+#                 nr,nc=r+dr,c+dc
+#                 if 0<=nr<H and 0<=nc<W:
+#                     nb=sd[nr,nc]
+#                     if cur!=nb:
+#                         i,j=id2i[cur],id2i[nb]; src+=[i,j]; dst+=[j,i]
+#     if not src:
+#         for i in range(N):
+#             for j in range(i+1,N): src+=[i,j]; dst+=[j,i]
+#     es=set(zip(src,dst))
+#     if es: s,d=zip(*es)
+#     else: s,d=[],[]
+#     ei=torch.tensor([list(s),list(d)],dtype=torch.long)
+#     return Data(x=nf,edge_index=ei,y=torch.tensor([label],dtype=torch.long))
+
+# 1. Properly shaped mean and std for broadcasting over (H, W, 3)
+IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(
+    1, 1, 3
+)
+IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 1, 3)
+
+
 def _unnorm(t):
-    img=t.detach().cpu().numpy().transpose(1,2,0)
-    return np.clip(img*STD_NP+MEAN_NP,0,1)
+    # Convert PyTorch Tensor [C, H, W] -> NumPy [H, W, C]
+    if isinstance(t, torch.Tensor):
+        img_np = t.detach().cpu().numpy().transpose(1, 2, 0)
+    else:
+        img_np = np.asarray(t).transpose(1, 2, 0)
+
+    # Un-normalize back to [0, 1] range
+    img_unnorm = (img_np * IMAGENET_STD) + IMAGENET_MEAN
+    return np.clip(img_unnorm, 0.0, 1.0)
+
 
 def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
-    C,H,W = feat_map.shape
-    img_np = _unnorm(img_t)
-    segs = slic(img_np, n_segments=n_seg, compactness=compact, start_label=0, channel_axis=2)
-    sh,sw = segs.shape[0]/H, segs.shape[1]/W
-    sd = ndimage.zoom(segs.astype(float),(1/sh,1/sw),order=0).astype(int)[:H,:W]
+    C, H, W = feat_map.shape
+    # Ensure un-normalized image is a clean float64/float32 (H, W, C) numpy array
+    img_np = _unnorm(img_t).astype(np.float64)
+
+    # Run SLIC segmentation on 3D array
+    segs = slic(
+        img_np,
+        n_segments=n_seg,
+        compactness=compact,
+        start_label=0,
+        channel_axis=2,
+    )
+
+    sh, sw = segs.shape[0] / H, segs.shape[1] / W
+    sd = ndimage.zoom(segs.astype(float), (1 / sh, 1 / sw), order=0).astype(
+        int
+    )[:H, :W]
+
     feat = feat_map.detach().cpu()
-    uids = np.unique(sd); id2i = {s:i for i,s in enumerate(uids)}; N=len(uids)
+    uids = np.unique(sd)
+    id2i = {s: i for i, s in enumerate(uids)}
+    N = len(uids)
+
     nf = torch.zeros(N, C)
     for s in uids:
-        mask = torch.from_numpy((sd==s).astype(np.float32))
+        mask = torch.from_numpy((sd == s).astype(np.float32))
         cnt = mask.sum().clamp(min=1)
-        nf[id2i[s]] = (feat*mask.unsqueeze(0)).sum([1,2])/cnt
-    src,dst=[],[]
+        nf[id2i[s]] = (feat * mask.unsqueeze(0)).sum([1, 2]) / cnt
+
+    src, dst = [], []
     for r in range(H):
         for c in range(W):
-            cur=sd[r,c]
-            for dr,dc in [(0,1),(1,0),(1,1),(1,-1)]:
-                nr,nc=r+dr,c+dc
-                if 0<=nr<H and 0<=nc<W:
-                    nb=sd[nr,nc]
-                    if cur!=nb:
-                        i,j=id2i[cur],id2i[nb]; src+=[i,j]; dst+=[j,i]
+            cur = sd[r, c]
+            for dr, dc in [(0, 1), (1, 0), (1, 1), (1, -1)]:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < H and 0 <= nc < W:
+                    nb = sd[nr, nc]
+                    if cur != nb:
+                        i, j = id2i[cur], id2i[nb]
+                        src += [i, j]
+                        dst += [j, i]
+
     if not src:
         for i in range(N):
-            for j in range(i+1,N): src+=[i,j]; dst+=[j,i]
-    es=set(zip(src,dst))
-    if es: s,d=zip(*es)
-    else: s,d=[],[]
-    ei=torch.tensor([list(s),list(d)],dtype=torch.long)
-    return Data(x=nf,edge_index=ei,y=torch.tensor([label],dtype=torch.long))
+            for j in range(i + 1, N):
+                src += [i, j]
+                dst += [j, i]
+
+    es = set(zip(src, dst))
+    if es:
+        s_nodes, d_nodes = zip(*es)
+    else:
+        s_nodes, d_nodes = [], []
+
+    ei = torch.tensor([list(s_nodes), list(d_nodes)], dtype=torch.long)
+    return Data(
+        x=nf, edge_index=ei, y=torch.tensor([label], dtype=torch.long)
+    )
 
 def build_multiscale_graphs(img_t, feat_map, label):
     fine=build_superpixel_graph(img_t,feat_map,label,n_seg=40,compact=8)
