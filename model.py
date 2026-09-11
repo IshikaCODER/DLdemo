@@ -65,9 +65,15 @@ class ResNet50CBAMBackbone(nn.Module):
         return x
 
 # --- Superpixel Graph Construction ---
+# def _unnorm(t):
+#     img=t.detach().cpu().numpy().transpose(1,2,0)
+#     return np.clip(img*STD_NP+MEAN_NP,0,1)
 def _unnorm(t):
-    img=t.detach().cpu().numpy().transpose(1,2,0)
-    return np.clip(img*STD_NP+MEAN_NP,0,1)
+    # Convert PyTorch tensor [C, H, W] -> NumPy array [H, W, C]
+    img = t.detach().cpu().numpy().transpose(1, 2, 0)
+    # Un-normalize back to [0, 1] range using reshaped arrays
+    img = img * STD_NP + MEAN_NP
+    return np.clip(img, 0.0, 1.0)
 
 def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
     C,H,W = feat_map.shape
