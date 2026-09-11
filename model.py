@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt, seaborn as sns
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
-MEAN_NP = np.array(IMAGENET_MEAN)
-STD_NP = np.array(IMAGENET_STD)
+MEAN_NP = np.array(IMAGENET_MEAN, dtype=np.float32).reshape(1, 1, 3)
+STD_NP = np.array(IMAGENET_STD, dtype=np.float32).reshape(1, 1, 3)
 
 # --- CBAM ---
 class ChannelAttention(nn.Module):
