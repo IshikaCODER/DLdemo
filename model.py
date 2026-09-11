@@ -12,6 +12,11 @@ from scipy import ndimage
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, seaborn as sns
 
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+MEAN_NP = np.array(IMAGENET_MEAN)
+STD_NP = np.array(IMAGENET_STD)
+
 # --- CBAM ---
 class ChannelAttention(nn.Module):
     def __init__(self, ch, r=16):
