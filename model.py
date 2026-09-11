@@ -122,10 +122,8 @@ def _unnorm(t):
 
 def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
     C, H, W = feat_map.shape
-    # Ensure un-normalized image is a clean float64/float32 (H, W, C) numpy array
     img_np = _unnorm(img_t).astype(np.float64)
 
-    # Run SLIC segmentation on 3D array
     segs = slic(
         img_np,
         n_segments=n_seg,
@@ -160,26 +158,32 @@ def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
                     nb = sd[nr, nc]
                     if cur != nb:
                         i, j = id2i[cur], id2i[nb]
-                        src += [i, j]
-                        dst += [j, i]
+                        src.append(i)
+                        src.append(j)
+                        dst.append(j)
+                        dst.append(i)
 
+    # Fallback to fully connected graph if no adjacencies were found
     if not src:
         for i in range(N):
             for j in range(i + 1, N):
-                src += [i, j]
-                dst += [j, i]
+                src.append(i)
+                src.append(j)
+                dst.append(j)
+                dst.append(i)
 
-    es = set(zip(src, dst))
-    if es:
-        s_nodes, d_nodes = zip(*es)
+    # Clean deduplication using defined variables src and dst
+    edge_set = set(zip(src, dst))
+    if edge_set:
+        s_list, d_list = zip(*edge_set)
     else:
-        s_nodes, d_nodes = [], []
+        s_list, d_list = [], []
 
-    ei = torch.tensor([list(s_nodes), list(d_nodes)], dtype=torch.long)
+    ei = torch.tensor([list(s_list), list(d_list)], dtype=torch.long)
     return Data(
         x=nf, edge_index=ei, y=torch.tensor([label], dtype=torch.long)
     )
-
+    
 def build_multiscale_graphs(img_t, feat_map, label):
     fine=build_superpixel_graph(img_t,feat_map,label,n_seg=40,compact=8)
     coarse=build_superpixel_graph(img_t,feat_map,label,n_seg=20,compact=12)
