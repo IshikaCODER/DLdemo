@@ -33,24 +33,21 @@ class GradCAMStreamlit:
     def generate(self, img_tensor, target_class=None):
         self.model.eval()
         
-        # Ensure gradients are explicitly enabled for Grad-CAM computation
+        # Explicitly enable gradients for Grad-CAM
         with torch.enable_grad():
             img_t = img_tensor.clone().detach().requires_grad_(True)
-
-            # Target target layer: layer4 backbone
             target_layer = self.model.backbone.layer4
 
-            # Define forward hook
+            # Forward hook: captures output AND registers a tensor-level backward hook directly on output
             def forward_hook(module, input, output):
                 self.act = output
+                # Tensor hook is guaranteed to execute when output gets backward gradients
+                def tensor_backward_hook(grad):
+                    self.grad = grad
+                output.register_hook(tensor_backward_hook)
 
-            # Define tensor-level backward hook (more reliable than module backward hook)
-            def backward_hook(module, grad_in, grad_out):
-                self.grad = grad_out[0]
-
-            # Register dynamic hooks
+            # Register forward hook only
             h_fw = target_layer.register_forward_hook(forward_hook)
-            h_bw = target_layer.register_full_backward_hook(backward_hook)
 
             # Forward pass
             out = self.model(img_t)
@@ -62,17 +59,12 @@ class GradCAMStreamlit:
             score = out[0, target_class]
             score.backward(retain_graph=True)
 
-            # Remove hooks immediately after execution
+            # Remove forward hook
             h_fw.remove()
-            h_bw.remove()
 
-            # Safety fallback: If backward hook didn't capture gradients, extract manually from act
-            if self.grad is None and self.act is not None and self.act.grad is not None:
-                self.grad = self.act.grad
-
-            # If grad is still None, raise a clean exception with context
-            if self.grad is None:
-                raise RuntimeError("Grad-CAM failed to capture gradients from backbone layer4.")
+            # Safety assertion
+            if self.grad is None or self.act is None:
+                raise RuntimeError("Grad-CAM tensor hook failed to capture gradients from backbone layer4.")
 
             # Compute feature weights and activation map
             w = self.grad.detach().mean([2, 3], keepdim=True)
@@ -106,7 +98,6 @@ def visualize_gradcam_fig(model, raw_image, img_tensor, target_class, class_name
         a.axis('off')
     plt.tight_layout()
     return fig, hm
-
 def visualize_gat_attention_fig(model, img_tensor):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
