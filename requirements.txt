@@ -5,3 +5,8 @@ numpy
 torch
 torchvision
 torch-geometric
+scikit-learn
+scikit-image
+scipy
+matplotlib
+seaborn
