@@ -7,7 +7,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import global_mean_pool, MessagePassing
 from torch_geometric.utils import add_self_loops, softmax as pyg_softmax
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report, confusion_matrix
 from skimage.segmentation import slic
 from scipy import ndimage
 import matplotlib; matplotlib.use("Agg")
