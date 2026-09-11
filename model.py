@@ -65,77 +65,27 @@ class ResNet50CBAMBackbone(nn.Module):
         return x
 
 # # --- Superpixel Graph Construction ---
-# def _unnorm(t):
-#     img=t.detach().cpu().numpy().transpose(1,2,0)
-#     return np.clip(img*STD_NP+MEAN_NP,0,1)
-
-# def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
-#     C,H,W = feat_map.shape
-#     img_np = _unnorm(img_t)
-#     segs = slic(img_np, n_segments=n_seg, compactness=compact, start_label=0, channel_axis=2)
-#     sh,sw = segs.shape[0]/H, segs.shape[1]/W
-#     sd = ndimage.zoom(segs.astype(float),(1/sh,1/sw),order=0).astype(int)[:H,:W]
-#     feat = feat_map.detach().cpu()
-#     uids = np.unique(sd); id2i = {s:i for i,s in enumerate(uids)}; N=len(uids)
-#     nf = torch.zeros(N, C)
-#     for s in uids:
-#         mask = torch.from_numpy((sd==s).astype(np.float32))
-#         cnt = mask.sum().clamp(min=1)
-#         nf[id2i[s]] = (feat*mask.unsqueeze(0)).sum([1,2])/cnt
-#     src,dst=[],[]
-#     for r in range(H):
-#         for c in range(W):
-#             cur=sd[r,c]
-#             for dr,dc in [(0,1),(1,0),(1,1),(1,-1)]:
-#                 nr,nc=r+dr,c+dc
-#                 if 0<=nr<H and 0<=nc<W:
-#                     nb=sd[nr,nc]
-#                     if cur!=nb:
-#                         i,j=id2i[cur],id2i[nb]; src+=[i,j]; dst+=[j,i]
-#     if not src:
-#         for i in range(N):
-#             for j in range(i+1,N): src+=[i,j]; dst+=[j,i]
-#     es=set(zip(src,dst))
-#     if es: s,d=zip(*es)
-#     else: s,d=[],[]
-#     ei=torch.tensor([list(s),list(d)],dtype=torch.long)
-#     return Data(x=nf,edge_index=ei,y=torch.tensor([label],dtype=torch.long))
-
-# 1. Properly shaped mean and std for broadcasting over (H, W, 3)
-IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(
-    1, 1, 3
-)
+# ImageNet mean and std reshaped for (1, 1, 3) broadcasting
+IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 1, 3)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 1, 3)
 
-
 def _unnorm(t):
-    # Convert PyTorch Tensor [C, H, W] -> NumPy [H, W, C]
     if isinstance(t, torch.Tensor):
         img_np = t.detach().cpu().numpy().transpose(1, 2, 0)
     else:
         img_np = np.asarray(t).transpose(1, 2, 0)
-
-    # Un-normalize back to [0, 1] range
+    
     img_unnorm = (img_np * IMAGENET_STD) + IMAGENET_MEAN
     return np.clip(img_unnorm, 0.0, 1.0)
-
 
 def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
     C, H, W = feat_map.shape
     img_np = _unnorm(img_t).astype(np.float64)
 
-    segs = slic(
-        img_np,
-        n_segments=n_seg,
-        compactness=compact,
-        start_label=0,
-        channel_axis=2,
-    )
+    segs = slic(img_np, n_segments=n_seg, compactness=compact, start_label=0, channel_axis=2)
 
-    sh, sw = segs.shape[0] / H, segs.shape[1] / W
-    sd = ndimage.zoom(segs.astype(float), (1 / sh, 1 / sw), order=0).astype(
-        int
-    )[:H, :W]
+    sh, sw = segs.shape[0]/H, segs.shape[1]/W
+    sd = ndimage.zoom(segs.astype(float), (1/sh, 1/sw), order=0).astype(int)[:H, :W]
 
     feat = feat_map.detach().cpu()
     uids = np.unique(sd)
@@ -163,7 +113,6 @@ def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
                         dst.append(j)
                         dst.append(i)
 
-    # Fallback to fully connected graph if no adjacencies were found
     if not src:
         for i in range(N):
             for j in range(i + 1, N):
@@ -172,7 +121,6 @@ def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
                 dst.append(j)
                 dst.append(i)
 
-    # Clean deduplication using defined variables src and dst
     edge_set = set(zip(src, dst))
     if edge_set:
         s_list, d_list = zip(*edge_set)
@@ -180,9 +128,7 @@ def build_superpixel_graph(img_t, feat_map, label, n_seg=50, compact=10):
         s_list, d_list = [], []
 
     ei = torch.tensor([list(s_list), list(d_list)], dtype=torch.long)
-    return Data(
-        x=nf, edge_index=ei, y=torch.tensor([label], dtype=torch.long)
-    )
+    return Data(x=nf, edge_index=ei, y=torch.tensor([label], dtype=torch.long))
     
 def build_multiscale_graphs(img_t, feat_map, label):
     fine=build_superpixel_graph(img_t,feat_map,label,n_seg=40,compact=8)
